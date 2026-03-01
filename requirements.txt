@@ -1,0 +1,10 @@
+altair
+pandas
+streamlitFlask
+gunicorn
+numpy
+pillow
+pydantic
+scikit-learn
+joblib
+pandas

@@ -1,0 +1,87 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+import joblib
+import pandas as pd
+
+# ✅ Initialisation de l'application
+app = FastAPI()
+
+# ✅ Charger les modèles depuis ton répertoire
+rf_model = joblib.load(r"D:/PROJET_DIT-20250506T153458Z-001/MES_PROJETS/DIEMMME/modele_food_insecurity.pkl")
+xgb_model = joblib.load(r"D:/PROJET_DIT-20250506T153458Z-001/MES_PROJETS/DIEMMME/modele_food_insecurity_xgb1.pkl")
+
+# ✅ Colonnes attendues par les modèles
+features_rf = list(rf_model.feature_names_in_)
+features_xgb = list(xgb_model.feature_names_in_)
+
+# ✅ Schéma d'entrée
+class InputData(BaseModel):
+    # ⚠️ Mets ici les colonnes que tu veux utiliser (les 5 sélectionnées)
+    q606_1_avoir_faim_mais_ne_pas_manger: int
+    q605_1_ne_plus_avoir_de_nourriture_pas_suffisamment_d_argent: int
+    q604_manger_moins_que_ce_que_vous_auriez_du: int
+    q603_sauter_un_repas: int
+    q601_ne_pas_manger_nourriture_saine_nutritive: int
+    modele: str = "rf_model"   # valeur par défaut ("rf_model" ou "xgb_model")
+
+# ✅ Endpoint de santé
+@app.get("/health")
+def health_check():
+    return {"status": "API opérationnelle ✅"}
+
+# ✅ Endpoint de prédiction
+@app.post("/predict")
+def predict(data: InputData):
+    try:
+        input_df = pd.DataFrame([data.dict()])
+
+        # Choisir le modèle
+        if data.modele == "xgb_model":
+            model = xgb_model
+            expected_features = features_xgb
+        else:
+            model = rf_model
+            expected_features = features_rf
+
+        # Vérification des colonnes
+        if list(input_df[expected_features].columns) != expected_features:
+            raise ValueError(
+                f"Les colonnes envoyées ne correspondent pas au modèle {data.modele}.\n"
+                f"Attendu : {expected_features}\n"
+                f"Reçu : {list(input_df.columns)}"
+            )
+
+        # Prédiction
+        proba = model.predict_proba(input_df[expected_features])[0]
+        seuil_severe = 0.4
+        prediction_binaire = int(proba[1] > seuil_severe)
+
+        if input_df[expected_features].sum().sum() == 0:
+            niveau = "aucune"
+            profil = "neutre"
+        else:
+            niveau = "sévère" if prediction_binaire == 1 else "modérée"
+            profil = "critique" if prediction_binaire == 1 else "intermédiaire"
+
+        return JSONResponse(content={
+            "prediction": prediction_binaire,
+            "niveau": niveau,
+            "profil": profil,
+            "score": round(float(proba[1]), 4),
+            "probabilités": {
+                "classe_0": round(float(proba[0]), 4),
+                "classe_1": round(float(proba[1]), 4)
+            },
+            "modele_utilisé": data.modele
+        })
+
+    except Exception as e:
+        return JSONResponse(content={
+            "error": "Une erreur est survenue",
+            "details": str(e)
+        }, status_code=500)
+
+
+# ✅ Lancer l'application avec :
+# uvicorn app:app --reload
