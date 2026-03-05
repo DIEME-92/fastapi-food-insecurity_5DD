@@ -1,26 +1,29 @@
 import os
+import joblib
+import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
-import joblib
-import pandas as pd
 
 # ✅ Initialisation de l'application
 app = FastAPI()
 
-# ✅ Charger les modèles depuis ton répertoire
 # ✅ Charger les modèles avec un chemin relatif
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-rf_model = joblib.load(os.path.join(BASE_DIR, "modele_food_insecurity.pkl"))
-xgb_model = joblib.load(os.path.join(BASE_DIR, "modele_food_insecurity_xgb1.pkl"))
+
+try:
+    rf_model = joblib.load(os.path.join(BASE_DIR, "modele_food_insecurity.pkl"))
+    xgb_model = joblib.load(os.path.join(BASE_DIR, "modele_food_insecurity_xgb1.pkl"))
+except Exception as e:
+    print("Erreur lors du chargement des modèles :", e)
+    rf_model, xgb_model = None, None
 
 # ✅ Colonnes attendues par les modèles
-features_rf = list(rf_model.feature_names_in_)
-features_xgb = list(xgb_model.feature_names_in_)
+features_rf = list(rf_model.feature_names_in_) if rf_model else []
+features_xgb = list(xgb_model.feature_names_in_) if xgb_model else []
 
 # ✅ Schéma d'entrée
 class InputData(BaseModel):
-    # ⚠️ Mets ici les colonnes que tu veux utiliser (les 5 sélectionnées)
     q606_1_avoir_faim_mais_ne_pas_manger: int
     q605_1_ne_plus_avoir_de_nourriture_pas_suffisamment_d_argent: int
     q604_manger_moins_que_ce_que_vous_auriez_du: int
@@ -37,6 +40,9 @@ def health_check():
 @app.post("/predict")
 def predict(data: InputData):
     try:
+        if rf_model is None or xgb_model is None:
+            raise RuntimeError("Les modèles n'ont pas été chargés correctement.")
+
         input_df = pd.DataFrame([data.dict()])
 
         # Choisir le modèle
@@ -48,7 +54,7 @@ def predict(data: InputData):
             expected_features = features_rf
 
         # Vérification des colonnes
-        if list(input_df[expected_features].columns) != expected_features:
+        if not all(col in input_df.columns for col in expected_features):
             raise ValueError(
                 f"Les colonnes envoyées ne correspondent pas au modèle {data.modele}.\n"
                 f"Attendu : {expected_features}\n"
@@ -84,9 +90,3 @@ def predict(data: InputData):
             "error": "Une erreur est survenue",
             "details": str(e)
         }, status_code=500)
-
-
-# ✅ Lancer l'application avec :
-# uvicorn app:app --reload
-
-
