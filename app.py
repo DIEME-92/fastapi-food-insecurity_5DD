@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
@@ -87,4 +88,5 @@ def predict(data: InputData):
 
 # ✅ Lancer l'application avec :
 # uvicorn app:app --reload
+
 
