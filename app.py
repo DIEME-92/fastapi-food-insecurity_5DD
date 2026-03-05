@@ -8,8 +8,10 @@ import pandas as pd
 app = FastAPI()
 
 # ✅ Charger les modèles depuis ton répertoire
-rf_model = joblib.load(r"D:/PROJET_DIT-20250506T153458Z-001/MES_PROJETS/DIEMMME/modele_food_insecurity.pkl")
-xgb_model = joblib.load(r"D:/PROJET_DIT-20250506T153458Z-001/MES_PROJETS/DIEMMME/modele_food_insecurity_xgb1.pkl")
+# ✅ Charger les modèles avec un chemin relatif
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+rf_model = joblib.load(os.path.join(BASE_DIR, "modele_food_insecurity.pkl"))
+xgb_model = joblib.load(os.path.join(BASE_DIR, "modele_food_insecurity_xgb1.pkl"))
 
 # ✅ Colonnes attendues par les modèles
 features_rf = list(rf_model.feature_names_in_)
@@ -85,3 +87,4 @@ def predict(data: InputData):
 
 # ✅ Lancer l'application avec :
 # uvicorn app:app --reload
+
